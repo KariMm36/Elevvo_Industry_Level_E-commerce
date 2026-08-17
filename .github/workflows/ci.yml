@@ -87,7 +87,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run database schema sync
-        run: npx prisma db push
+        run: npx prisma db push --skip-generate
 
       - name: Run Unit Tests
         run: npm test
@@ -136,13 +136,16 @@ jobs:
       - name: Install dependencies for migration
         run: npm ci
 
-      # Execute Prisma migrations safely against the cloud database using GitHub Secret
+      # Execute Prisma migrations safely against the cloud database IF secret is configured
       - name: 🐘 Apply Database Migrations to Cloud PostgreSQL
-        run: npx prisma db push --skip-generate
+        if: env.DATABASE_URL != ''
+        run: |
+          echo "Applying migrations to cloud database..."
+          npx prisma db push --skip-generate
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
-      # Trigger zero-downtime rolling update via Render / Railway / Cloud Webhook
+      # Trigger zero-downtime rolling update via Render / Railway / Cloud Webhook IF secret is configured
       - name: 🌐 Trigger Cloud Provider Zero-Downtime Deployment
         if: env.DEPLOY_HOOK != ''
         run: |
@@ -154,7 +157,7 @@ jobs:
       - name: 📋 Deployment Summary
         run: |
           echo "=========================================================="
-          echo "✅ Production Deployment Pipeline Succeeded!"
+          echo "✅ CI/CD Pipeline Succeeded!"
           echo "🚀 Commit SHA : ${{ github.sha }}"
           echo "🛡️ Secrets    : All credentials safely loaded from GitHub Secrets"
           echo "=========================================================="
