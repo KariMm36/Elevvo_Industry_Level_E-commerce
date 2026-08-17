@@ -40,35 +40,6 @@ This capstone project synthesizes all foundational and industry-level backend co
                                                            └───────────────┘
 ```
 
-```mermaid
-flowchart TD
-    Client[🖥️ Client / Swagger UI] -->|HTTP Request| Gateway[⚡ NestJS API Gateway]
-    Gateway --> Guard{🛡️ JWT & Roles Guard}
-    
-    Guard -->|Auth & Users| AuthMod[🔐 Auth & Address Book]
-    Guard -->|Catalog| ProdMod[📦 Products & Cache-Aside]
-    Guard -->|Cart & Checkout| OrderMod[🛒 Cart & Atomic Orders]
-    Guard -->|After-Sales| ReturnMod[🔄 Returns & Reviews]
-    Guard -->|Telemetry| HealthMod[📊 Deep Health Check]
-
-    ProdMod <-->|TTL Cache & Invalidate| RedisCache[(🔴 Redis Cache)]
-    OrderMod -->|Idempotency Lock| RedisIdem[(🔴 Redis Idempotency)]
-    OrderMod -->|Atomic $transaction| Postgres[(🐘 PostgreSQL Database)]
-    OrderMod -->|LPUSH OrderPlaced| RedisQueue[(🔴 Redis Event Queue)]
-
-    RedisQueue -->|RPOP Async Worker| Worker[⚙️ Background Notification Worker]
-
-    style Client fill:#3b82f6,color:#fff
-    style Gateway fill:#6366f1,color:#fff
-    style Guard fill:#8b5cf6,color:#fff
-    style Postgres fill:#0284c7,color:#fff
-    style RedisCache fill:#ef4444,color:#fff
-    style RedisIdem fill:#ef4444,color:#fff
-    style RedisQueue fill:#dc2626,color:#fff
-    style Worker fill:#059669,color:#fff
-```
-
----
 
 ## 🌟 Key Features & Industry Patterns
 
@@ -216,41 +187,5 @@ The pipeline runs automatically on every push and pull request to `main`:
 
 ---
 
-## ☁️ Zero-Downtime Cloud Deployment Guide
 
-This application is designed for instant deployment on cloud platforms (**Render, Railway, AWS EC2 / ECS, or Fly.io**) paired with managed cloud databases (**Neon / Supabase PostgreSQL + Upstash Redis**).
-
-### 1. Cloud Infrastructure Setup (e.g. Neon + Upstash + Render)
-1. **PostgreSQL**: Create a serverless PostgreSQL database on [Neon.tech](https://neon.tech) or [Supabase](https://supabase.com) and copy the connection string:
-   ```env
-   DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/ecommerce_prod?sslmode=require"
-   ```
-2. **Redis**: Create a serverless Redis instance on [Upstash](https://upstash.com) and obtain the host and port:
-   ```env
-   REDIS_HOST="us1-fluent-salmon-12345.upstash.io"
-   REDIS_PORT=6379
-   ```
-3. **Web Service**: Create a new Web Service on [Render](https://render.com) or [Railway](https://railway.app) connected to your GitHub repository and set Docker as the runtime environment.
-
-### 2. GitHub Actions Secrets Configuration
-To enable the automated CD pipeline, add the following repository secrets in **GitHub ➔ Settings ➔ Secrets and variables ➔ Actions**:
-
-| Secret Name | Description | Example / Source |
-|---|---|---|
-| `PROD_DATABASE_URL` | Cloud PostgreSQL connection string | `postgresql://user:pass@neon.tech/ecommerce_prod` |
-| `RENDER_DEPLOY_HOOK_URL` | Cloud provider deployment webhook | `https://api.render.com/deploy/srv-xyz?key=abc` |
-| `JWT_SECRET` | Production JWT secret key | Generated secure 64-char string |
-
-### 3. Secret Isolation & Zero-Downtime Guarantees
-- **No `.env` in Git**: Sensitive credentials are never committed (`.gitignore`).
-- **Atomic Pre-Deploy Migrations**: Database schema migrations execute *before* new container instances receive traffic, preventing runtime schema mismatches.
-- **Health-Checked Rolling Updates**: The cloud provider routes traffic to new container instances only after their `/api/v1/health` probe returns `200 OK`, guaranteeing **zero downtime**.
-
----
-
-## 🛡️ Distributed Redis Rate Limiting Architecture
-
-Unlike basic in-memory rate limiters that reset when an application scales horizontally, this system uses a custom **`ThrottlerStorageRedisService`**:
-- All rate-limit counters (`throttle:<name>:<ip>`) and blocking durations (`throttle:blocked:<name>:<ip>`) are stored natively in **Redis**.
-- When the API scales to multiple container instances behind a load balancer, client rate limits (e.g. 100 requests/minute) remain **strictly distributed and synchronized across all nodes**.
 
