@@ -1,0 +1,207 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum StockChangeReason {
+  CHECKOUT
+  CANCEL_RESTOCK
+  ADMIN_RESTOCK
+  RETURN_RESTOCK
+}
+
+// ─── User & Auth ─────────────────────────────────────────────────────────────
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String
+  name           String
+  role           Role            @default(CUSTOMER)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  orders         Order[]
+  reviews        Review[]
+  cart           Cart?
+  addresses      Address[]
+  returnRequests ReturnRequest[]
+
+  @@index([email])
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street     String
+  city       String
+  state      String
+  country    String
+  postalCode String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+
+model Product {
+  id                String              @id @default(uuid())
+  sku               String              @unique
+  name              String
+  description       String
+  price             Float
+  stock             Int
+  lowStockThreshold Int                 @default(5)
+  category          String
+  averageRating     Float               @default(0)
+  totalReviews      Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  orderItems        OrderItem[]
+  reviews           Review[]
+  cartItems         CartItem[]
+  inventoryLogs     InventoryAuditLog[]
+
+  @@index([category])
+  @@index([sku])
+}
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  @@unique([cartId, productId])
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+
+model Order {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  status          OrderStatus     @default(PENDING)
+  totalAmount     Float
+  idempotencyKey  String?         @unique
+  // Address snapshot at checkout time
+  shippingStreet  String
+  shippingCity    String
+  shippingState   String
+  shippingCountry String
+  shippingZip     String
+  currency        String          @default("USD")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  items           OrderItem[]
+  returnRequests  ReturnRequest[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float   // snapshot of price at time of purchase
+}
+
+// ─── Returns ──────────────────────────────────────────────────────────────────
+
+model ReturnRequest {
+  id          String       @id @default(uuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id])
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  reason      String
+  status      ReturnStatus @default(REQUESTED)
+  resolvedBy  String?      // Admin userId who approved/rejected
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  rating    Int      // 1-5
+  comment   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId]) // one review per product per user
+  @@index([productId])
+}
+
+// ─── Inventory Audit Log ──────────────────────────────────────────────────────
+
+model InventoryAuditLog {
+  id            String            @id @default(uuid())
+  productId     String
+  product       Product           @relation(fields: [productId], references: [id])
+  previousStock Int
+  newStock      Int
+  changeReason  StockChangeReason
+  changedBy     String            // userId who triggered the change
+  createdAt     DateTime          @default(now())
+
+  @@index([productId])
+  @@index([changeReason])
+}
